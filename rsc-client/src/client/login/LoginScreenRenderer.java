@@ -33,7 +33,7 @@ public class LoginScreenRenderer extends StateRenderer {
         int x = canvas.getWidth() / 2
                 - LOGO_SPRITE_WIDTH / 2
                 - LOGO_SPRITE_OFFSET_X;
-        canvas.drawSprite(x, 50, SPRITE_ID_LOGO);
+        //canvas.drawSprite(x, 50, SPRITE_ID_LOGO);
     }
 
 }

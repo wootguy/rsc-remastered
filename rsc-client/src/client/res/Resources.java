@@ -164,9 +164,9 @@ public class Resources {
             tex.pixels[pixelIndex * 3 + i] = colour - (colour >>> 2) - (colour >>> 3) & 0xf8f8ff;
         }
 
-        // No longer needed
-        tex.palette = null;
-        tex.colourData = null;
+        // Not needed unless exporting this later
+        //tex.palette = null;
+        //tex.colourData = null;
     }
 
 }

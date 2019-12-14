@@ -86,7 +86,7 @@ public class Game extends State implements PacketContext {
     @Override
     public void start() {
         executor = Executors.newCachedThreadPool();
-        executor.execute(connection.getPacketReaderThread());
+        //executor.execute(connection.getPacketReaderThread());
     }
 
     @Override
@@ -177,12 +177,14 @@ public class Game extends State implements PacketContext {
     }
 
     private void handlePackets() {
+    	/*
         for (Packet p : connection.getPacketsReceived()) {
             PacketHandler handler = PacketRegistry.getPacketHandler(p.id);
             if (handler != null) {
                 handler.apply(p, this);
             }
         }
+        */
     }
 
     private void updateCamera() {

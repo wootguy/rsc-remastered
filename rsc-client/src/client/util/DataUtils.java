@@ -46,5 +46,15 @@ public class DataUtils {
     public static int rgbToInt(int r, int g, int b) {
         return -1 - (r / 8) * 1024 - (g / 8) * 32 - (b / 8);
     }
-
+    
+    // reverses whatever rgbToInt is doing, then packs the rgb bytes into an int the normal way.
+    public static int rscColorToRgbColor(int c) {
+    	c = -1 - c;
+    	
+    	int r = (c >> 10) * 8;
+    	int g = ((c >> 5) & 31) * 8;
+    	int b = (c & 31) * 8;
+    	
+    	return (r << 16) + (g << 8) + b;
+    }
 }

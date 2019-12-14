@@ -30,7 +30,8 @@ public class LoginScreen extends State {
     public void pollInput() {
         if (input.wasLeftClickReleased()) {
             // For now, just connect to the server immediately
-            connect(SERVER_ADDRESS, SERVER_PORT);
+            //connect(SERVER_ADDRESS, SERVER_PORT);
+            sendLoginPacket(null);
         }
     }
 

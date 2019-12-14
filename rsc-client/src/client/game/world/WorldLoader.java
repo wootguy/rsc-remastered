@@ -1,9 +1,30 @@
 package client.game.world;
 
+import java.awt.image.BufferedImage;
+import java.awt.image.RenderedImage;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.imageio.ImageIO;
+
+import org.joml.Vector3f;
+import org.joml.Vector3i;
+
 import client.entityhandling.defs.TileDef;
 import client.game.model.Sector;
 import client.game.scene.Model;
+import client.game.world.ModelExporter.ExportLayer;
 import client.res.Resources;
+import client.res.Texture;
 import client.util.DataUtils;
 import client.util.ModelUtils;
 
@@ -29,8 +50,8 @@ public class WorldLoader {
     /**
      * Ground colour palette.
      */
-    private static final int[] GROUND_COLOURS = new int[256];
-
+    public static final int[] GROUND_COLOURS = new int[256];
+    
     /**
      * The minimum possible layer ID.
      *
@@ -75,7 +96,7 @@ public class WorldLoader {
         }
     }
 
-    private World world;
+    public World world;
 
     public WorldLoader(World world) {
         this.world = world;
@@ -129,6 +150,8 @@ public class WorldLoader {
         moveObjects(dx, dz);
     }
 
+    boolean exportMode = true;
+    
     /**
      * Loads all required layers of the given sector.
      *
@@ -137,7 +160,66 @@ public class WorldLoader {
      * @param currentLayer
      */
     private void loadRequiredLayers(int sectorX, int sectorZ, int currentLayer) {
-
+    	
+    	if (exportMode) {
+	        System.out.println("Exporting entire map now!");
+	        try {
+	        	FileWriter terrainSmd = null;
+	    		FileWriter wallSmd = null;
+	    		FileWriter roofSmd = null;
+	    		FileWriter floorSmd = null; // upper story floors and bridges
+	    		if (ModelExporter.superModelMode) {
+	    	        terrainSmd = new FileWriter("land.smd");
+	    	        wallSmd = new FileWriter("wall.smd");
+	    	        roofSmd = new FileWriter("roof.smd");
+	    	        floorSmd = new FileWriter("floor.smd");
+	    	        
+	    	        terrainSmd.write(ModelExporter.SMD_HEADER);
+	    	        wallSmd.write(ModelExporter.SMD_HEADER);
+	    	        roofSmd.write(ModelExporter.SMD_HEADER);
+	    	        floorSmd.write(ModelExporter.SMD_HEADER);
+	    		}
+	        	
+		        // entire world
+	        	/*
+		        for (int z = 38; z <= 57; z++) {
+		        	for (int x = 47; x <= 81; x++) {
+		        		ModelExporter.exportSector(this, x, z, terrainSmd, wallSmd, roofSmd, floorSmd);
+		        	}
+		        }
+		        
+		        */
+		        // f2p world
+		        if (1==2) {
+			        for (int z = 46; z <= 52; z++) {
+			        	for (int x = 49; x <= 57; x++) {
+			        		ModelExporter.exportSector(this, x, z, terrainSmd, wallSmd, roofSmd, floorSmd);
+			        	}
+			        }
+		        } else {
+		        	ModelExporter.exportSector(this, 51, 51, terrainSmd, wallSmd, roofSmd, floorSmd); // lumby
+		        	//ModelExporter.exportSector(this, 53, 51, terrainSmd, wallSmd, roofSmd, floorSmd);
+		        	//ModelExporter.exportSector(this, 51, 47, terrainSmd, wallSmd, roofSmd, floorSmd);
+		        	// 49x52 = mansion
+		        }
+	    		
+	    		//ModelExporter.writeAllTextures();
+	    		
+		        if (ModelExporter.superModelMode) {
+					terrainSmd.close();
+					wallSmd.close();
+					roofSmd.close();
+					floorSmd.close();
+				}
+		        
+	        } catch (IOException e) {
+	        	e.printStackTrace();
+	        }
+	        
+	        System.out.println("DID IT");
+	        System.exit(0);
+        }
+    	
         System.out.println("Loading sector: " + sectorX + ", " + sectorZ +
                 " (" + currentLayer + ")");
 
@@ -162,8 +244,9 @@ public class WorldLoader {
      * @param layer
      * @param isCurrentLayer
      */
-    private void loadLayer(int sectorX, int sectorZ, int layer, boolean isCurrentLayer) {
+    public ExportLayer loadLayer(int sectorX, int sectorZ, int layer, boolean isCurrentLayer) {
 
+    	ExportLayer exportLayer = new ExportLayer();
         setCurrentSector(sectorX, sectorZ, layer);
 
         tmpModel.clear();
@@ -410,7 +493,11 @@ public class WorldLoader {
                     }
                 }
             }
-
+            
+            if (exportMode) {
+            	exportLayer.terrain = tmpModel.copy(true, false, false, false);
+            }
+            
             tmpModel.setLighting(true, 40, 48, -50, -10, -50);
 
             Model[] landscapeModels = tmpModel.split(1536, 1536, 8, 64, 233, false);
@@ -545,7 +632,13 @@ public class WorldLoader {
                 }
             }
         }
+        
+        if (exportMode) {
+            exportLayer.walls = tmpModel.copy(true, false, false, false);
+        }
 
+        List<Boolean> roofFlags = new ArrayList<>();
+        
         tmpModel.clear();
         for (int x = 1; x < World.NUM_TILES_X - 1; x++) {
             for (int z = 1; z < World.NUM_TILES_Z - 1; z++) {
@@ -661,6 +754,7 @@ public class WorldLoader {
                         ai8[1] = tmpModel.addUniqueVertex(j26, i28, i27);
                         ai8[2] = tmpModel.addUniqueVertex(k25, k27, k26);
                         tmpModel.addFace(3, ai8, i12, 0xbc614e);
+                        roofFlags.add(false); // probably not right
                     } else if (getDiagonalWalls(x, z) > 12000 && getDiagonalWalls(x, z) < 24000
                             && getRoofTexture(x + 1, z + 1) == 0) {
                         int ai9[] = new int[3];
@@ -668,6 +762,7 @@ public class WorldLoader {
                         ai9[1] = tmpModel.addUniqueVertex(k25, k27, k26);
                         ai9[2] = tmpModel.addUniqueVertex(j26, i28, i27);
                         tmpModel.addFace(3, ai9, i12, 0xbc614e);
+                        roofFlags.add(false); // probably not right
                     } else if (getDiagonalWalls(x, z) > 0 && getDiagonalWalls(x, z) < 12000
                             && getRoofTexture(x + 1, z - 1) == 0) {
                         int ai10[] = new int[3];
@@ -675,6 +770,7 @@ public class WorldLoader {
                         ai10[1] = tmpModel.addUniqueVertex(k24, j27, i25);
                         ai10[2] = tmpModel.addUniqueVertex(l26, l27, i26);
                         tmpModel.addFace(3, ai10, i12, 0xbc614e);
+                        roofFlags.add(false); // probably not right
                     } else if (getDiagonalWalls(x, z) > 0 && getDiagonalWalls(x, z) < 12000
                             && getRoofTexture(x - 1, z + 1) == 0) {
                         int ai11[] = new int[3];
@@ -682,6 +778,7 @@ public class WorldLoader {
                         ai11[1] = tmpModel.addUniqueVertex(l26, l27, i26);
                         ai11[2] = tmpModel.addUniqueVertex(k24, j27, i25);
                         tmpModel.addFace(3, ai11, i12, 0xbc614e);
+                        roofFlags.add(false); // probably not right
                     } else if (j27 == k27 && l27 == i28) {
                         int ai12[] = new int[4];
                         ai12[0] = tmpModel.addUniqueVertex(k24, j27, i25);
@@ -689,6 +786,7 @@ public class WorldLoader {
                         ai12[2] = tmpModel.addUniqueVertex(l26, l27, i26);
                         ai12[3] = tmpModel.addUniqueVertex(j26, i28, i27);
                         tmpModel.addFace(4, ai12, i12, 0xbc614e);
+                        roofFlags.add(true);
                     } else if (j27 == i28 && k27 == l27) {
                         int ai13[] = new int[4];
                         ai13[0] = tmpModel.addUniqueVertex(j26, i28, i27);
@@ -696,6 +794,7 @@ public class WorldLoader {
                         ai13[2] = tmpModel.addUniqueVertex(k25, k27, k26);
                         ai13[3] = tmpModel.addUniqueVertex(l26, l27, i26);
                         tmpModel.addFace(4, ai13, i12, 0xbc614e);
+                        roofFlags.add(false);
                     } else {
                         boolean flag1 = true;
                         if (getRoofTexture(x - 1, z - 1) > 0) {
@@ -727,11 +826,18 @@ public class WorldLoader {
                             ai17[2] = tmpModel.addUniqueVertex(k25, k27, k26);
                             tmpModel.addFace(3, ai17, i12, 0xbc614e);
                         }
+                        roofFlags.add(!flag1);
+                        roofFlags.add(!flag1);
                     }
                 }
             }
         }
 
+        if (exportMode) {
+            exportLayer.roofs = tmpModel.copy(true, false, false, false);
+            exportLayer.roofFlags = roofFlags;
+        }
+        
         tmpModel.setLighting(true, 50, 50, -50, -10, -50);
         Model[] roofModels = tmpModel.split(1536, 1536, 8, 64, 169, true);
         world.setRoofModels(layer, roofModels);
@@ -744,9 +850,11 @@ public class WorldLoader {
                 }
             }
         }
+        
+        return exportLayer;
     }
 
-    private void setCurrentSector(int sectorX, int sectorZ, int layer) {
+    public void setCurrentSector(int sectorX, int sectorZ, int layer) {
 
         world.setSector(0, Resources.loadSector(sectorX - 1, sectorZ - 1, layer));
         world.setSector(1, Resources.loadSector(sectorX, sectorZ - 1, layer));
@@ -844,7 +952,7 @@ public class WorldLoader {
         return world.getSector(sector).getTile(x, z).diagonalWalls;
     }
 
-    private int getTileType(int x, int z) {
+    public int getTileType(int x, int z) {
         int texture = world.getGroundTextureOverlay(x, z);
         if (texture == 0) {
             return -1;
