@@ -181,28 +181,24 @@ public class WorldLoader {
 	    		}
 	        	
 		        // entire world
-	        	/*
-		        for (int z = 38; z <= 57; z++) {
-		        	for (int x = 47; x <= 81; x++) {
-		        		ModelExporter.exportSector(this, x, z, terrainSmd, wallSmd, roofSmd, floorSmd);
-		        	}
-		        }
-		        
-		        */
+	        	if (1==2) {
+			        for (int z = 38; z <= 57; z++) {
+			        	for (int x = 47; x <= 81; x++) {
+			        		ModelExporter.exportSector(this, x, z, terrainSmd, wallSmd, roofSmd, floorSmd);
+			        	}
+			        }
+	        	}
 		        // f2p world
-		        if (1==2) {
-			        for (int z = 46; z <= 52; z++) {
+	        	else if (1==2) {
+			        for (int z = 45; z <= 52; z++) {
 			        	for (int x = 49; x <= 57; x++) {
 			        		ModelExporter.exportSector(this, x, z, terrainSmd, wallSmd, roofSmd, floorSmd);
 			        	}
 			        }
 		        } else {
-		        	ModelExporter.exportSector(this, 51, 51, terrainSmd, wallSmd, roofSmd, floorSmd); // lumby
-		        	//ModelExporter.exportSector(this, 53, 51, terrainSmd, wallSmd, roofSmd, floorSmd);
-		        	//ModelExporter.exportSector(this, 51, 47, terrainSmd, wallSmd, roofSmd, floorSmd);
-		        	// 49x52 = mansion
+		        	//ModelExporter.exportSector(this, 51, 51, terrainSmd, wallSmd, roofSmd, floorSmd); // lumby
+		        	ModelExporter.exportSector(this, 51, 51, terrainSmd, wallSmd, roofSmd, floorSmd);
 		        }
-	    		
 	    		//ModelExporter.writeAllTextures();
 	    		
 		        if (ModelExporter.superModelMode) {

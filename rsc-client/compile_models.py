@@ -13,7 +13,7 @@ $sequence "idle" {
 	fps 0
 }
 
-$bodygroup "body"
+$bodygroup "subsector"
 {
 '''
 
@@ -42,37 +42,23 @@ for file in glob.glob("*.bmp"):
 for file in glob.glob("transparent/*.bmp"):
 	shutil.copy(file, os.path.basename(file))
 
-for file in glob.glob("sector_*0_b0.smd"):
-	print("CHECKING " + file)
-	mdl_name = file.split("_0_b0")[0]
+for file in glob.glob("sector_*_b00.smd"):
+	mdl_name = file.split("_b00")[0]
 	body1 = file.replace(".smd", "")
-	body2 = body1.replace("_b0", "_b1")
-	body3 = body1.replace("_b0", "_b2")
 	
 	qcpath = "mdl/" + mdl_name + ".qc"
 	with open(qcpath, "w") as qc:
 		qc.write('$modelname "' + mdl_name + '.mdl"\n')
 		qc.write(qc_start)
 		
-		qc.write('$bodygroup "landscape0"\n{\n')
-		qc.write('\tstudio "%s"\n' % body1)
-		qc.write("}\n")
-		
-		qc.write('$bodygroup "landscape1"\n{\n')
-		qc.write('\tstudio "%s"\n' % body2)
-		qc.write("}\n")
-		
 		rendermode_textures = []
 		
-		for k in ['_0_b2', '_0_b3', '_0_b4', 
-				  '_1_b0', '_1_b1', '_1_b2', '_1_b3',
-				  '_2_b0', '_2_b1', '_2_b2', '_2_b3',
-				  '_3_b0', '_3_b1', '_3_b2', '_3_b3']:
-			part = body1.replace("_0_b0", k)
+		for k in ['_b00', '_b01', '_b10', '_b11']:
+			part = body1.replace("_b00", k)
 			if os.path.exists(part + ".smd"):
-				qc.write('$bodygroup "objects' + k + '"\n{\n')
+				#qc.write('$bodygroup "subsector' + k + '"\n{\n')
 				qc.write('\tstudio "%s"\n' % part)
-				qc.write("}\n")
+				#qc.write("}\n")
 				
 				with open(part + ".smd") as f:
 					for line in f.readlines():
@@ -80,6 +66,8 @@ for file in glob.glob("sector_*0_b0.smd"):
 							texName = line[:-1]
 							if texName not in rendermode_textures and texName in transparent_textures:
 								rendermode_textures.append(texName)
+		
+		qc.write("}\n")
 		
 		for tex in rendermode_textures:
 			qc.write("$texrendermode " + tex + " masked\n")

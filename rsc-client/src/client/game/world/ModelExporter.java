@@ -115,6 +115,18 @@ public class ModelExporter {
 					+ nx + " " + ny + " " + nz + " " 
 					+ u + " " + v + "\n";
 		}
+		
+		String toSmdString(Vector3f offset) {
+			Vector3f off = new Vector3f(offset);
+			off.x += WORLD_OFFSET.x;
+			off.y += WORLD_OFFSET.y;
+			off.z += WORLD_OFFSET.z;
+			return "0 " + (x*WORLD_SCALE + off.x) + " " 
+					+ (y*WORLD_SCALE + off.y) + " " 
+					+ (z*WORLD_SCALE + + off.z) + " " 
+					+ nx + " " + ny + " " + nz + " " 
+					+ u + " " + v + "\n";
+		}
 	}
 	
 	static class Triangle {
@@ -201,15 +213,23 @@ public class ModelExporter {
 		}
 	}
 	
+	static class SubSector {
+		FileWriter smd;
+		Vector3f offset;
+		
+		SubSector(FileWriter smd, Vector3f offset) {
+			this.smd = smd;
+			this.offset = offset;
+		}
+	}
+	
 	ModelExporter(WorldLoader worldLoader, int sectorX, int sectorZ, int layer) {
 		this.worldLoader = worldLoader;
 		this.sectorX = sectorX;
 		this.sectorZ = sectorZ;
 		this.layer = layer;
 		
-		this.smdPrefix = "sector_" + sectorX + "_" + sectorZ + "_" + layer;
-		
-		
+		this.smdPrefix = "sector_" + sectorX + "_" + sectorZ + "_" + layer;		
 	}
 	
 	public int getLandscapeHeight(int[][] landscapeHeights, Vertex vert) {
@@ -375,7 +395,6 @@ public class ModelExporter {
 	        WORLD_OFFSET.y = (sectorZ - 50)*32*96;
 		}
 		
-		
         List<ExportLayer> layers = new ArrayList<>();
 		layers.add(loader.loadLayer(sectorX, sectorZ, 0, true));
 		layers.add(loader.loadLayer(sectorX, sectorZ, 1, true));
@@ -423,17 +442,19 @@ public class ModelExporter {
 		
 		int[][] landscapeHeights = getLandscapeHeights(layers.get(0).terrain);
 		
+		String[][] smdPaths = new String[SUB_SECTOR_COUNT][SUB_SECTOR_COUNT];
 		FileWriter[][] smdBodies = new FileWriter[SUB_SECTOR_COUNT][SUB_SECTOR_COUNT];
 		if (!superModelMode) {
 			for (int x = 0; x < SUB_SECTOR_COUNT; x++) {
 				for (int y = 0; y < SUB_SECTOR_COUNT; y++) {
-					String smd_path = "sector_" + sectorX + "_" + sectorZ + "_b" + x + "" + y + ".smd";
-					smdBodies[x][y] = new FileWriter(smd_path);
+					smdPaths[x][y] = "sector_" + sectorX + "_" + sectorZ + "_b" + x + "" + y + ".smd";
+					smdBodies[x][y] = new FileWriter(smdPaths[x][y]);
 					smdBodies[x][y].write(SMD_HEADER);	
 				}
 			}
 		}
 		
+		boolean exportedAnything = false;
 		for (int j = 0; j < layers.size(); j++) {
 			ExportLayer layer = layers.get(j);
 			
@@ -463,19 +484,23 @@ public class ModelExporter {
 			
 			ModelExporter modelExporter = new ModelExporter(loader, sectorX, sectorZ, j);
 			if (layer.terrain != null)
-				modelExporter.exportTerrain(layer.terrain, landscapeHeights, layer.terrainNormals, 
-						layer.bridgeNormals, terrainSmd, floorSmd, smdBodies);
+				exportedAnything = modelExporter.exportTerrain(layer.terrain, landscapeHeights, layer.terrainNormals, 
+						layer.bridgeNormals, terrainSmd, floorSmd, smdBodies) || exportedAnything;
 			if (layer.walls != null)
-				modelExporter.exportWalls(layer.walls, landscapeHeights, wallSmd, smdBodies);
+				exportedAnything = modelExporter.exportWalls(layer.walls, landscapeHeights
+						, wallSmd, smdBodies) || exportedAnything;
 			if (layer.roofs != null)
-				modelExporter.exportRoofs(layer.roofs, landscapeHeights, layer.roofFlags, 
-						layer.roofNormals, roofSmd, smdBodies);
+				exportedAnything = modelExporter.exportRoofs(layer.roofs, landscapeHeights, layer.roofFlags, 
+						layer.roofNormals, roofSmd, smdBodies) || exportedAnything;
 		}
 		
 		if (!superModelMode) {
 			for (int x = 0; x < SUB_SECTOR_COUNT; x++) {
 				for (int y = 0; y < SUB_SECTOR_COUNT; y++) {
 					smdBodies[x][y].close();
+					if (!exportedAnything) {
+						new File(smdPaths[x][y]).delete();
+					}
 				}
 			}
 		}
@@ -517,16 +542,16 @@ public class ModelExporter {
             	// 3 = building foundation?
             	// 4 = water under bridge?
             	// 9 = mountain side
-            	if (groundTextureOverlay > 0 && false) {
+            	if (groundTextureOverlay > 0 && true && layer == 1) {
                 	int tileType1 = Resources.getTileDef(groundTextureOverlay - 1).getType();
                     int tileType2 = worldLoader.getTileType(x, z);
                 	c = Resources.getTileDef(groundTextureOverlay - 1).getColour();
-                	if (groundTextureOverlay == 14) {
-            			//System.out.println("ZOMG bank: " + c);
+                	if (groundTextureOverlay == 18) {
+            			System.out.println("ZOMG bank: " + c);
                 	}
                 	c = DataUtils.rscColorToRgbColor(c);
             		
-                	//System.out.println("LE OVERLAY: " + groundTextureOverlay);
+                	System.out.println("LE OVERLAY: " + groundTextureOverlay);
             	}
             	
             	for (int px = (x+border)*scale; px < (x+border)*scale+scale; px++) {
@@ -692,7 +717,7 @@ public class ModelExporter {
 		return tris;
 	}
 	
-	public FileWriter pickBodySmd(FileWriter[][] writers, Triangle t) {
+	private SubSector getSubSector(FileWriter[][] writers, Triangle t) {
 		float minX = 99999;
 		float minZ = 99999;
 		for (int i = 0; i < t.verts.length; i++) {
@@ -704,19 +729,21 @@ public class ModelExporter {
 			}
 		}
 		
-		int subSectorSize = (32*96) / SUB_SECTOR_COUNT;
-		int subX = Math.max( Math.min((int)minX / subSectorSize, SUB_SECTOR_COUNT-1), 0);
-		int subZ = Math.max( Math.min((int)minZ / subSectorSize, SUB_SECTOR_COUNT-1), 0);
-		System.out.println("PICKING SMD " + subX + " " + subZ);
-		return writers[subX][subZ];
+		int subSectorSize = (2*32*96) / SUB_SECTOR_COUNT;
+		int subOffset = (int)((subSectorSize/2 - 0) * WORLD_SCALE);
+		int subX = Math.max( Math.min((int)(minX-64) / subSectorSize, SUB_SECTOR_COUNT-1), 0);
+		int subZ = Math.max( Math.min((int)(minZ-64) / subSectorSize, SUB_SECTOR_COUNT-1), 0);
+		
+		return new SubSector(writers[subZ][(SUB_SECTOR_COUNT-1)-subX], 
+				new Vector3f(-(subX*2-1)*subOffset, -(subZ*2-1)*subOffset, 0));
 	}
 	
-	public void exportTerrain(Model model, int[][] landscapeHeights, Vector3f[] terrainNormals, 
+	public boolean exportTerrain(Model model, int[][] landscapeHeights, Vector3f[] terrainNormals, 
 			Vector3f[] bridgeNormals, FileWriter terrainSmd, FileWriter floorSmd, FileWriter[][] smdBodies) throws IOException {        	
 		
         if (isEmpty(model)) {
         	//System.out.println("Skipping empty layer " + layer);
-        	return;
+        	return false;
         }
         
         if (layer == 0 || layer == 3) // layers 1-2 are building floors only
@@ -736,10 +763,13 @@ public class ModelExporter {
 			boolean isBridge = model.faceFillBack[i] == 0xbc614e;
 			boolean isWater = model.faceFillBack[i] == 1;
 			boolean isLava = model.faceFillBack[i] == 31;
-			boolean isBuildingFloor = model.faceFillBack[i] == 3;
+			boolean isBuildingFloor = model.faceFillBack[i] == 3 || model.faceFillBack[i] == -1;
 			boolean isMountainSide = model.faceFillBack[i] == -26426;
 			boolean isCarpet = model.faceFillBack[i] == -27685;
+			boolean isCarpet2 = model.faceFillBack[i] == -9225;
+			boolean isCarpet3 = model.faceFillBack[i] == -4534;
 			boolean isStar = model.faceFillBack[i] == 32;
+			boolean isWood = model.faceFillBack[i] == -2;
 			
 			if (superModelMode && (isWater || isLava)) {
 				boolean isZeroHeightWater = true;
@@ -757,7 +787,8 @@ public class ModelExporter {
 			
 			List<Triangle> tris = triangulateFace(model, i, isBridge ? bridgeNormals : terrainNormals);
 			
-			if (isBuildingFloor || isBridge || isRoad || isWater || isLava || isMountainSide || isCarpet || isStar) {
+			if (isBuildingFloor || isBridge || isRoad || isWater || isLava || isMountainSide || 
+					isCarpet || isCarpet2 || isCarpet3 || isStar || isWood) {
 				for (Triangle tri : tris) {
 					tri.applyTopDownUV(false);
 				}
@@ -791,6 +822,18 @@ public class ModelExporter {
 					tri.texture = "carpet.bmp";
 	    			writeSolidColorTexture(tri.texture, DataUtils.rscColorToRgbColor(-27685));
 				}
+				else if (isCarpet2) {
+					tri.texture = "carpet2.bmp";
+	    			writeSolidColorTexture(tri.texture, DataUtils.rscColorToRgbColor(-9225));
+				}
+				else if (isCarpet3) {
+					tri.texture = "carpet3.bmp";
+	    			writeSolidColorTexture(tri.texture, DataUtils.rscColorToRgbColor(-4534));
+				}
+				else if (isWood) {
+					tri.texture = "wood.bmp";
+					writeSolidColorTexture(tri.texture, model.faceFillFront[i]);
+				}
 				else if (isWater) {
 					tri.texture = "water.bmp";
 					writeTexture(Resources.textures[1], tri.texture);
@@ -821,7 +864,7 @@ public class ModelExporter {
 			
 			landscapeTris.addAll(tris);
 			
-			if (isBuildingFloor || isBridge || isRoad || isCarpet) {
+			if (isBuildingFloor || isBridge || isRoad || isCarpet || isCarpet2 || isCarpet3 || isStar || isWood) {
 				if (isBridge || (layer > 0 && layer != 3)) {
 					for (Triangle tri : tris) {
 						landscapeTris.add(tri.flip()); // underside of second/third story floors
@@ -831,7 +874,7 @@ public class ModelExporter {
 		}
 		
 		if (landscapeTris.isEmpty())
-			return;
+			return false;
 		
 		// sectors have a little more than 4096 tris, so multiple body groups are needed
 		// to get a goldsource mdl to compile.
@@ -855,8 +898,12 @@ public class ModelExporter {
     		for (int i = offset; i < offset + len; i++) {
     			boolean superModelFloor = superModelMode && layer != 0 && layer != 3;
     			
-    			if (terrainSmd == null)
-    				smd = pickBodySmd(smdBodies, landscapeTris.get(i));
+    			Vector3f triOffset = new Vector3f();
+    			if (terrainSmd == null) {
+    				SubSector subSector = getSubSector(smdBodies, landscapeTris.get(i));
+    				smd = subSector.smd;
+    				triOffset = subSector.offset;
+    			}
     			
     			if (superModelFloor)
     				floorSmd.write(landscapeTris.get(i).texture + "\n");
@@ -877,7 +924,7 @@ public class ModelExporter {
             		if (superModelFloor)
             			floorSmd.write(vert.toSmdString());
             		else
-            			smd.write(vert.toSmdString());
+            			smd.write(vert.toSmdString(triOffset));
             	}
             }
     		
@@ -904,11 +951,12 @@ public class ModelExporter {
     			smd.write(v0.toSmdString());
     		}
 		}
+		return true;
 	}
 
-	public void exportWalls(Model model, int[][] landscapeHeights, FileWriter bigSmd, FileWriter[][] smdBodies) throws IOException {
+	public boolean exportWalls(Model model, int[][] landscapeHeights, FileWriter bigSmd, FileWriter[][] smdBodies) throws IOException {
         if (isEmpty(model))
-        	return;
+        	return false;
     	
         String smd_path = smdPrefix + "_b2.smd";
         
@@ -1030,23 +1078,28 @@ public class ModelExporter {
 			}
 			
 			for (int t = 0; t < tris.size(); t++) {
-				if (bigSmd == null)
-    				smd = pickBodySmd(smdBodies, tris.get(t));
+				Vector3f triOffset = new Vector3f();
+    			if (bigSmd == null) {
+    				SubSector subSector = getSubSector(smdBodies, tris.get(t));
+    				smd = subSector.smd;
+    				triOffset = subSector.offset;
+    			}
 				
     			smd.write(tris.get(t).texture + "\n");
     			
             	for (int k = 0; k < 3; k++) {
             		Vertex vert = tris.get(t).verts[k];
-            		smd.write(vert.toSmdString());
+            		smd.write(vert.toSmdString(triOffset));
             	}
     		}
 		}
+		return true;
 	}
 
-	public void exportRoofs(Model model, int[][] landscapeHeights, List<Boolean> roofFlags, 
+	public boolean exportRoofs(Model model, int[][] landscapeHeights, List<Boolean> roofFlags, 
 			Vector3f[] normals, FileWriter bigSmd, FileWriter[][] smdBodies) throws IOException {
 		if (isEmpty(model))
-        	return;
+        	return false;
 	
     	//
     	// write model
@@ -1095,14 +1148,20 @@ public class ModelExporter {
 		}
 		
 		for (int i = 0; i < roofTris.size(); i++) {
-			if (bigSmd == null)
-				smd = pickBodySmd(smdBodies, roofTris.get(i));
+			Vector3f triOffset = new Vector3f();
+			if (bigSmd == null) {
+				SubSector subSector = getSubSector(smdBodies, roofTris.get(i));
+				smd = subSector.smd;
+				triOffset = subSector.offset;
+			}
 			
         	smd.write(roofTris.get(i).texture + "\n");
         	for (int k = 0; k < 3; k++) {        		
         		Vertex vert = roofTris.get(i).verts[k];
-        		smd.write(vert.toSmdString());
+        		smd.write(vert.toSmdString(triOffset));
         	}
         }
+		
+		return true;
 	}
 }
